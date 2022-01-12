@@ -9,7 +9,7 @@ import Foundation
 
 public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
     
-    private var webSocketTask: URLSessionWebSocketTask?
+    private var webSocketTask: URLSessionWebSocketTaskWrapper?
     private var urlSession: URLSession!
     private var connectContinuation: CheckedContinuation<Void, Error>?
     private var streamContinuation: AsyncStream<AsyncWebSocketEvent>.Continuation?
@@ -26,30 +26,29 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         webSocketTask = urlSession.webSocketTask(with: url)
     }
     
-    init(url: URL, session: URLSession) async {
+    init(webSocketTask: URLSessionWebSocketTaskWrapper) {
         super.init()
-        self.urlSession = session
-        webSocketTask = urlSession.webSocketTask(with: url)
+        self.webSocketTask = webSocketTask
     }
     
     public func connect() async throws {
         guard let webSocketTask = webSocketTask else { throw AsyncWebSocketError.invalidSocket }
         return try await withCheckedThrowingContinuation { continuation in
             connectContinuation = continuation
-            webSocketTask.resume()
+            webSocketTask.wrappedResume()
         }
     }
     
     public func disconnect() async throws {
         guard let webSocketTask = webSocketTask else { throw AsyncWebSocketError.invalidSocket }
-        webSocketTask.cancel(with: .goingAway, reason: nil)
+        webSocketTask.wrappedCancel(with: .goingAway, reason: nil)
     }
     
     public func send(_ data: AsyncWebSocketData) async throws {
         guard let webSocketTask = webSocketTask else { throw AsyncWebSocketError.invalidSocket }
         
         try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<Void, Error>) in
-            webSocketTask.send(data.message) { error in
+            webSocketTask.wrappedSend(data.message) { error in
                 if let error = error {
                     continuation.resume(throwing: error)
                     return
@@ -69,15 +68,7 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         }
     }
     
-    private func listen()  {
-        webSocketTask?.receive { result in
-            Task { [weak self] in
-                await self?.processReceivedResult(result)
-            }
-        }
-    }
-    
-    private func processReceivedResult(_ result: Result<URLSessionWebSocketTask.Message, Error>) {
+    func processReceivedResult(_ result: Result<URLSessionWebSocketTask.Message, Error>) {
         switch result {
         case .failure(let error):
             updateStream(with: error)
@@ -98,7 +89,7 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         }
     }
     
-    private func socketWasOpened() {
+    func socketWasOpened() {
         if let connectContinuation = connectContinuation {
             connectContinuation.resume()
             self.connectContinuation = nil
@@ -107,10 +98,18 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         listen()
     }
     
-    private func socketFailedToOpen() {
+    func socketFailedToOpen() {
         guard let connectContinuation = connectContinuation else { return }
         connectContinuation.resume(throwing: AsyncWebSocketError.failedToConnect)
         self.connectContinuation = nil
+    }
+    
+    private func listen()  {
+        webSocketTask?.wrappedReceive { result in
+            Task { [weak self] in
+                await self?.processReceivedResult(result)
+            }
+        }
     }
     
     private func updateStream(with data: AsyncWebSocketData) {
