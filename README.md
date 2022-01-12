@@ -1,8 +1,8 @@
+(WORK IN PROGRESS)
+
 # AsyncWebSocketClient
 
 ![badge-platforms][] [![badge-spm][]][spm]
-
-(WORK IN PROGRESS)
 
 This is a package that contains a client behaving as a wrapper for the URLSessionWebSocketTask provided by Apple.
 

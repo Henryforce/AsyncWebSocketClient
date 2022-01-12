@@ -1,3 +1,10 @@
+//
+//  AsyncWebSocketClientTests.swift
+//  AsyncWebSocketClient
+//
+//  Created by Henry Javier Serrano Echeverria on 12/1/22.
+//
+
 import XCTest
 @testable import AsyncWebSocketClient
 
@@ -14,6 +21,7 @@ final class AsyncWebSocketClientTests: XCTestCase {
     
     override func tearDown() {
         super.tearDown()
+        mockSocketTask.cleanup()
         mockSocketTask = nil
         client = nil
     }
@@ -61,6 +69,80 @@ final class AsyncWebSocketClientTests: XCTestCase {
             XCTFail("Invalid error received")
             return
         }
+    }
+    
+    func testWebSocketClosedEvent() async {
+        // Given
+        let closedEvent: AsyncWebSocketEvent = .socketClosed(nil)
+        
+        // When
+        var iterator = await client.listenStream().makeAsyncIterator()
+        
+        await client.updateStream(with: closedEvent) // bypass client connection to immediately internally fake events received
+        
+        let event = await iterator.next()
+        
+        // Then
+        guard case .socketClosed = event else {
+            XCTFail("Invalid event received")
+            return
+        }
+    }
+    
+    func testDisconnect() async throws {
+        // When
+        try await client.disconnect()
+        
+        // Then
+        XCTAssertEqual(mockSocketTask.cancelWasCalledStack.count, 1)
+        guard let cancelData = mockSocketTask.cancelWasCalledStack.first else {
+            XCTFail("Invalid cancel data")
+            return
+        }
+        XCTAssertEqual(cancelData.0, .goingAway)
+        XCTAssertNil(cancelData.1)
+    }
+    
+    func testSendStringValue() async throws {
+        // Given
+        let dataStringValue = "Hello"
+        let data: AsyncWebSocketData = .string(dataStringValue)
+        
+        // When
+        try await client.send(data)
+        
+        // Then
+        XCTAssertEqual(mockSocketTask.sendWasCalledStack.count, 1)
+        guard case .string(let stringValue) = mockSocketTask.sendWasCalledStack.first else {
+            XCTFail("Invalid value")
+            return
+        }
+        XCTAssertEqual(dataStringValue, stringValue)
+    }
+    
+    // TODO: make a test for sending a raw data object
+    
+    func testReceive() async throws {
+        // Given
+        let resultStringValue = "Hello"
+        let result: Result<URLSessionWebSocketTask.Message, Error> = .success(.string(resultStringValue))
+        mockSocketTask.receiveValues.append(result)
+        
+        // When
+        var iterator = await client.listenStream().makeAsyncIterator()
+        
+        await client.listen() // bypass client connection to immediately listen for received data
+        
+        let event = await iterator.next()
+        
+        // Then
+        XCTAssertEqual(mockSocketTask.receiveWasCalledCount, 2) // Only one receive was processed in this test, but after a successful receive another one will be immediately triggered
+        guard case .dataReceived(let dataReceived) = event,
+              case .string(let stringValue) = dataReceived else {
+            XCTFail("Invalid event received")
+            return
+        }
+        XCTAssertEqual(stringValue, resultStringValue)
     }
     
     // TODO: remove temp tests

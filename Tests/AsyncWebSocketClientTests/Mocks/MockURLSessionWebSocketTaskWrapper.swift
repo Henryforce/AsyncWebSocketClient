@@ -35,15 +35,30 @@ final class MockURLSessionWebSocketTaskWrapper: URLSessionWebSocketTaskWrapper {
         cancelWasCalledStack.append((closeCode, reason))
     }
     
-    typealias SendData = (URLSessionWebSocketTask.Message, (Error?) -> Void)
-    var sendWasCalledStack = [SendData]()
+    var sendWasCalledStack = [URLSessionWebSocketTask.Message]()
+    var sendError: Error?
     func wrappedSend(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void) {
-        sendWasCalledStack.append((message, completionHandler))
+        sendWasCalledStack.append(message)
+        completionHandler(sendError)
     }
     
-    typealias ReceiveData = (Result<URLSessionWebSocketTask.Message, Error>) -> Void
-    var receiveWasCalledStack = [ReceiveData]()
+    typealias ReceiveHandler = (Result<URLSessionWebSocketTask.Message, Error>) -> Void
+    var receiveWasCalledCount = 0
+    var receiveValues = [Result<URLSessionWebSocketTask.Message, Error>]()
+    var receiveHandler: ReceiveHandler?
     func wrappedReceive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {
-        receiveWasCalledStack.append(completionHandler)
+        receiveWasCalledCount += 1
+        
+        guard !receiveValues.isEmpty else {
+            receiveHandler = completionHandler
+            return
+        }
+        let firstValue = receiveValues.removeFirst()
+        completionHandler(firstValue)
+    }
+    
+    func cleanup() {
+        guard let receiveHandler = receiveHandler else { return }
+        receiveHandler(.failure(AsyncWebSocketError.unknownError(nil)))
     }
 }

@@ -7,6 +7,8 @@
 
 import Foundation
 
+// TODO: handle ping pong
+
 public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
     
     private var webSocketTask: URLSessionWebSocketTaskWrapper?
@@ -104,12 +106,16 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         self.connectContinuation = nil
     }
     
-    private func listen()  {
+    func listen()  {
         webSocketTask?.wrappedReceive { result in
             Task { [weak self] in
                 await self?.processReceivedResult(result)
             }
         }
+    }
+    
+    func updateStream(with event: AsyncWebSocketEvent) {
+        streamContinuation?.yield(event)
     }
     
     private func updateStream(with data: AsyncWebSocketData) {
@@ -120,9 +126,6 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         streamContinuation?.yield(.socketClosed(error))
     }
     
-    private func updateStream(with event: AsyncWebSocketEvent) {
-        streamContinuation?.yield(event)
-    }
 }
 
 extension AsyncWebSocketClient: URLSessionWebSocketDelegate {
