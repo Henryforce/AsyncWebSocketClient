@@ -1,0 +1,16 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "AsyncTimeSequences",
+        "repositoryURL": "https://github.com/Henryforce/AsyncTimeSequences",
+        "state": {
+          "branch": null,
+          "revision": "1dbdc4b6c888bd26ec15d5c279d7d0284fae422a",
+          "version": "0.0.7"
+        }
+      }
+    ]
+  },
+  "version": 1
+}

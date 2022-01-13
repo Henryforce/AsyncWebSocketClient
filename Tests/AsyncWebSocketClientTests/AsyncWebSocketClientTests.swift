@@ -7,16 +7,20 @@
 
 import XCTest
 @testable import AsyncWebSocketClient
+import AsyncTimeSequences
+import AsyncTimeSequencesSupport
 
 final class AsyncWebSocketClientTests: XCTestCase {
     
     var mockSocketTask: MockURLSessionWebSocketTaskWrapper!
     var client: AsyncWebSocketClient!
+    var scheduler: TestAsyncScheduler!
     
     override func setUp() {
         super.setUp()
+        scheduler = TestAsyncScheduler()
         mockSocketTask = MockURLSessionWebSocketTaskWrapper()
-        client = AsyncWebSocketClient(webSocketTask: mockSocketTask)
+        client = AsyncWebSocketClient(webSocketTask: mockSocketTask, scheduler: scheduler)
     }
     
     override func tearDown() {
@@ -24,6 +28,7 @@ final class AsyncWebSocketClientTests: XCTestCase {
         mockSocketTask.cleanup()
         mockSocketTask = nil
         client = nil
+        scheduler = nil
     }
     
     func testConnectionOpened() async throws {
@@ -145,6 +150,61 @@ final class AsyncWebSocketClientTests: XCTestCase {
         XCTAssertEqual(stringValue, resultStringValue)
     }
     
+    func testPingPongWhenErrorIsReturnedFromTask() async {
+        // Given
+        let debounceTime = AsyncWebSocketClient.Constants.debounceTime
+        mockSocketTask.sendPingErrors = [AsyncWebSocketError.unknownError(nil)]
+        
+        // When
+        var iterator = await client.listenStream().makeAsyncIterator()
+        
+        await client.startPingPongHandler()
+        
+        await scheduler.waitForScheduledJobs(count: 1) // Wait for the debounce to start capturing the first event
+        
+        await scheduler.advance(by: debounceTime)
+        
+        let event = await iterator.next()
+        
+        // Then
+        guard case .socketClosed(let error) = event,
+              case .unknownError = error as? AsyncWebSocketError else {
+            XCTFail("Invalid event received")
+            return
+        }
+        XCTAssertEqual(mockSocketTask.sendPingWasCalledCount, 1)
+        XCTAssertEqual(mockSocketTask.cancelWasCalledStack.count, 1)
+    }
+    
+    func testPingPongIsNotTriggeredIfDataIsReceivedBetweenInterval() async {
+        // Given
+        let sendString = "Hello"
+        let halfDebounceTime = AsyncWebSocketClient.Constants.debounceTime / 2
+        mockSocketTask.sendPingErrors = [AsyncWebSocketError.unknownError(nil)]
+        
+        // When
+        var iterator = await client.listenStream().makeAsyncIterator()
+        
+        await client.startPingPongHandler()
+        
+        await scheduler.waitForScheduledJobs(count: 1) // Wait for the debounce to start capturing the first event
+        
+        await scheduler.advance(by: halfDebounceTime)
+        
+        await client.processReceivedResult(.success(.string(sendString))) // Mock a received string
+        
+        let event = await iterator.next()
+        
+        // Then
+        guard case .dataReceived(let data) = event,
+              case .string(let stringValue) = data else {
+            XCTFail("Invalid event received")
+            return
+        }
+        XCTAssertEqual(stringValue, sendString)
+        XCTAssertEqual(mockSocketTask.sendPingWasCalledCount, 0)
+    }
+    
     // TODO: remove temp tests
 //    func testExample() async throws {
 //        let client = AsyncWebSocketClient(url: URL(string: "ws://localhost:8765/")!)
@@ -153,10 +213,12 @@ final class AsyncWebSocketClientTests: XCTestCase {
 //            do {
 //                try await client.connect()
 //
-//                for index in 0..<10 {
+//                for index in 0..<5 {
 //                    try await client.send(.string("Hello \(index)"))
 //                    try await Task.sleep(nanoseconds: 1000000000)
 //                }
+//                
+//                try await client.close()
 //            } catch (let error) {
 //                print("\(error)")
 //            }
