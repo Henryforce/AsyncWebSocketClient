@@ -57,6 +57,16 @@ final class MockURLSessionWebSocketTaskWrapper: URLSessionWebSocketTaskWrapper {
         completionHandler(firstValue)
     }
     
+    var sendPingWasCalledCount = 0
+    var sendPingErrors = [Error]()
+    func wrappedSendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
+        sendPingWasCalledCount += 1
+        
+        guard !sendPingErrors.isEmpty else { return }
+        let firstError = sendPingErrors.removeFirst()
+        pongReceiveHandler(firstError)
+    }
+    
     func cleanup() {
         guard let receiveHandler = receiveHandler else { return }
         receiveHandler(.failure(AsyncWebSocketError.unknownError(nil)))

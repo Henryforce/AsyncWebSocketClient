@@ -6,8 +6,7 @@
 //
 
 import Foundation
-
-// TODO: handle ping pong
+import AsyncTimeSequences
 
 public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
     
@@ -15,10 +14,17 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
     private var urlSession: URLSession!
     private var connectContinuation: CheckedContinuation<Void, Error>?
     private var streamContinuation: AsyncStream<AsyncWebSocketEvent>.Continuation?
+    private let streamGenerator = StreamGenerator(value: Int.zero)
+    private let scheduler: AsyncScheduler
+    
+    enum Constants {
+        static let debounceTime: TimeInterval = 20.0
+    }
     
     // TODO: add a dequeue to keep track of events that could be missed by a subscriber if the stream is not requested
     
-    public init(url: URL) {
+    public init(url: URL, scheduler: AsyncScheduler = MainAsyncScheduler.default) {
+        self.scheduler = scheduler
         super.init()
         self.urlSession = URLSession(
             configuration: .default,
@@ -28,9 +34,10 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         webSocketTask = urlSession.webSocketTask(with: url)
     }
     
-    init(webSocketTask: URLSessionWebSocketTaskWrapper) {
-        super.init()
+    init(webSocketTask: URLSessionWebSocketTaskWrapper, scheduler: AsyncScheduler) {
         self.webSocketTask = webSocketTask
+        self.scheduler = scheduler
+        super.init()
     }
     
     public func connect() async throws {
@@ -41,9 +48,17 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         }
     }
     
+    /// Disconnects but keeps the stream open
     public func disconnect() async throws {
         guard let webSocketTask = webSocketTask else { throw AsyncWebSocketError.invalidSocket }
         webSocketTask.wrappedCancel(with: .goingAway, reason: nil)
+        self.webSocketTask = nil
+    }
+    
+    /// Disconnects and closes the stream
+    public func close() async throws {
+        try await disconnect()
+        finishStream()
     }
     
     public func send(_ data: AsyncWebSocketData) async throws {
@@ -60,6 +75,7 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         })
     }
     
+    /// Starts to listen to events. Only one active stream is allowed at all times.
     public func listenStream() async -> AsyncStream<AsyncWebSocketEvent> {
         return AsyncStream { continuation in
             if let savedContinuation = streamContinuation { // If there is an open stream, close it
@@ -86,6 +102,7 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
                 fatalError()
             }
             
+            resetPingPong()
             updateStream(with: socketData)
             listen()
         }
@@ -96,6 +113,7 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
             connectContinuation.resume()
             self.connectContinuation = nil
         }
+        startPingPongHandler()
         updateStream(with: .socketOpened)
         listen()
     }
@@ -114,6 +132,24 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         }
     }
     
+    /// A debouncing behavior is implemented to send a ping-pong every time after 20 seconds
+    /// have elapsed since the last time an event happened or this function was initially called.
+    func startPingPongHandler() {
+        Task { [weak self] in
+            guard let stream = await self?.streamGenerator.subscribe() else { return }
+            
+            let debouncedStream = stream.debounce(for: Constants.debounceTime, scheduler: scheduler)
+            
+            // Start debouncing now
+            await streamGenerator.updateValue(.zero)
+            
+            for await _ in debouncedStream {
+                guard let self = self else { break }
+                await self.performPingPong()
+            }
+        }
+    }
+    
     func updateStream(with event: AsyncWebSocketEvent) {
         streamContinuation?.yield(event)
     }
@@ -126,24 +162,30 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
         streamContinuation?.yield(.socketClosed(error))
     }
     
-}
-
-extension AsyncWebSocketClient: URLSessionWebSocketDelegate {
-    nonisolated public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+    private func performPingPong() {
+        webSocketTask?.wrappedSendPing(pongReceiveHandler: { error in
+            guard let error = error else { return }
+            Task { [weak self] in
+                await self?.terminate(with: error)
+            }
+        })
+    }
+    
+    private func resetPingPong() {
         Task {
-            await socketWasOpened()
+            await streamGenerator.updateValue(.zero)
         }
     }
     
-    nonisolated public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        Task {
-            await updateStream(with: .socketClosed(nil))
-        }
+    private func terminate(with error: Error) {
+        webSocketTask?.wrappedCancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        updateStream(with: .socketClosed(error))
     }
     
-    nonisolated public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        Task {
-            await socketFailedToOpen()
-        }
+    private func finishStream() {
+        streamContinuation?.finish()
+        streamContinuation = nil
     }
+    
 }

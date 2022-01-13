@@ -12,6 +12,7 @@ protocol URLSessionWebSocketTaskWrapper {
     func wrappedCancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
     func wrappedSend(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void)
     func wrappedReceive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void)
+    func wrappedSendPing(pongReceiveHandler: @escaping (Error?) -> Void)
 }
 
 extension URLSessionWebSocketTask: URLSessionWebSocketTaskWrapper {
@@ -29,5 +30,12 @@ extension URLSessionWebSocketTask: URLSessionWebSocketTaskWrapper {
     
     func wrappedReceive(completionHandler: @escaping (Result<Message, Error>) -> Void) {
         receive(completionHandler: completionHandler)
+    }
+    
+    func wrappedSendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
+        
+        sendPing { error in
+            pongReceiveHandler(error)
+        }
     }
 }
