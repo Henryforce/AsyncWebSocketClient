@@ -8,7 +8,7 @@
 import Foundation
 
 public enum AsyncWebSocketEvent {
-    case socketOpened
-    case socketClosed(Error?)
-    case dataReceived(AsyncWebSocketData)
+  case socketOpened
+  case socketClosed(Error?)
+  case dataReceived(AsyncWebSocketData)
 }
