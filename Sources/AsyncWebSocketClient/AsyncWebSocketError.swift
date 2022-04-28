@@ -8,7 +8,7 @@
 import Foundation
 
 enum AsyncWebSocketError: Error {
-    case invalidSocket
-    case failedToConnect
-    case unknownError(Error?)
+  case invalidSocket
+  case failedToConnect
+  case unknownError(Error?)
 }
