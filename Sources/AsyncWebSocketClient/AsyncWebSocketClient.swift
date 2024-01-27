@@ -135,8 +135,8 @@ public actor AsyncWebSocketClient: NSObject, AsyncWebSocketClientProtocol {
   /// A debouncing behavior is implemented to send a ping-pong every time after 20 seconds
   /// have elapsed since the last time an event happened or this function was initially called.
   func startPingPongHandler() {
-    Task { [weak self] in
-      guard let stream = await self?.streamGenerator.subscribe() else { return }
+    Task { [weak self, streamGenerator, scheduler] in
+      let stream = await streamGenerator.subscribe()
 
       let debouncedStream = stream.debounce(for: Constants.debounceTime, scheduler: scheduler)
 
