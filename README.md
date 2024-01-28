@@ -1,5 +1,3 @@
-(WORK IN PROGRESS)
-
 # AsyncWebSocketClient
 
 ![badge-platforms][] [![badge-spm][]][spm]
@@ -38,7 +36,7 @@ try await client.sendJSONData(objectToEncode)
 
 ## How to test
 
-(Coming soon)
+AsyncWebSocketClient conforms to AsyncWebSocketClientProtocol and it is recommended to use dependency injection to make testing easier. For convenience, this library also includes a mock target `AsyncWebSocketClientMocks` which you can use if you just need a simple mock. You could optionally add your own mock class conforming to AsyncWebSocketClientProtocol.
 
 ## Installation
 
