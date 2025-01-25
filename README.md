@@ -2,7 +2,7 @@
 
 ![badge-platforms][] [![badge-spm][]][spm]
 
-This is a package that contains a client behaving as a wrapper for the URLSessionWebSocketTask provided by Apple.
+This is a package that contains a client behaving as an async wrapper for the URLSessionWebSocketTask provided by Apple.
 
 ## Usage
 
@@ -16,7 +16,7 @@ try await client.send(.string("Hello world!")) // Either raw data or strings can
 let stream = await client.listenStream() // Returns an AsyncStream of events
 
 for await event in stream {
-    print(event) // Print events such as data received, connection opened, connection closed
+  print(event) // Print events such as data received, connection opened, connection closed
 }
 ```
 
@@ -25,11 +25,11 @@ for await event in stream {
 You can also send encodable objects to the client:
 
 ```swift
-struct MyEncodableClass: Encodable {
-    let title: String
+struct MyEncodableObject: Encodable, Sendable {
+  let title: String
 }
 
-let objectToEncode = MyEncodableClass(title: "Title")
+let objectToEncode = MyEncodableObject(title: "Title")
 
 try await client.sendJSONData(objectToEncode)
 ```
