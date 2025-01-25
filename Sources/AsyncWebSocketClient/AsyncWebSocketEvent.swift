@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum AsyncWebSocketEvent {
+public enum AsyncWebSocketEvent: Sendable {
   case socketOpened
   case socketClosed(Error?)
   case dataReceived(AsyncWebSocketData)

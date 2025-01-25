@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum AsyncWebSocketData {
+public enum AsyncWebSocketData: Sendable {
   case data(Data)
   case string(String)
 }

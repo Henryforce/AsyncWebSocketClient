@@ -7,7 +7,7 @@
 
 import Foundation
 
-actor StreamGenerator<T> {
+actor StreamGenerator<T: Sendable> {
   var subscribers = [UUID: AsyncStream<T>.Continuation]()
 
   var value: T { _value }

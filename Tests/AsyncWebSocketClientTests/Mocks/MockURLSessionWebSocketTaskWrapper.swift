@@ -9,7 +9,8 @@ import Foundation
 
 @testable import AsyncWebSocketClient
 
-final class MockURLSessionWebSocketTaskWrapper: URLSessionWebSocketTaskWrapper {
+final class MockURLSessionWebSocketTaskWrapper: URLSessionWebSocketTaskWrapper, @unchecked Sendable
+{
   init() {}
 
   var resumeWasCalledCount = 0
