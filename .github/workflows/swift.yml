@@ -8,11 +8,25 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+  
+    strategy:
+      matrix:
+        os: [ubuntu-24.04-arm, macos-latest-xlarge]
+        swift: ["6.0"]
     
     steps:
-     - uses: swift-actions/setup-swift@v2
-     - name: Build
-       run: swift build -v
-     - name: Run tests
-       run: swift test -v
+      - uses: actions/checkout@v4
+    
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: ${{ matrix.swift }}
+    
+      - run: swift --version
+
+      - name: Build
+        run: swift build -v
+
+      - name: Run tests
+        run: swift test -v
