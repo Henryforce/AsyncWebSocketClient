@@ -2,11 +2,9 @@ name: Swift
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ main ]
-env:
-  DEVELOPER_DIR: /Applications/Xcode_14.2.app/Contents/Developer
+    branches: [ "master" ]
 
 jobs:
   build:
@@ -14,7 +12,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Build
       run: swift build -v
     - name: Run tests
